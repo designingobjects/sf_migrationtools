@@ -1,4 +1,7 @@
-<project name="Sample usage of Salesforce Ant tasks" default="test" basedir="." 
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="./ant2html.xsl"?> 
+
+<project name="Sample usage of Salesforce Ant tasks" default="usage" basedir="." 
 	xmlns:sf="antlib:com.salesforce" 
 	xmlns:if="ant:if"
     xmlns:unless="ant:unless">
@@ -29,9 +32,14 @@
 		</classpath>
 	</taskdef>
 
-	<!-- ******************************************* -->
+	<target name="usage"> 
+    <echo message="  Execute 'ant -all' to build your local project."/> 
+    <echo message="  Execute 'ant -deploy' to deploy your local project to salesforce."/> 
+  </target> 
+	
+	<!-- =================================== -->
 	<!-- DOES EVERYTHING -->
-	<!-- ******************************************* -->
+	<!-- =================================== -->
 	
 	<target name="all" 
 			description="The one you call">
@@ -39,14 +47,14 @@
 		<antcall target="init" />
 		
 		<antcall target="build-manifest" />
-		<antcall target="clean" />
+		<clean-build />
 		
 		<antcall target="retrieve-by-manifest" />
 	</target>
 
-	<!-- ******************************************* -->
+	<!-- =================================== -->
 	<!-- INIT and CLEAN -->
-	<!-- ******************************************* -->
+	<!-- =================================== -->
 
 	<target name="clean-init" 
 			description="Calls clean then init targets">
@@ -59,8 +67,8 @@
 	</target>
 	<target name="clean"
 			description="Removes all artifacts that the build might have created">
-		<available file="${dir.build}" type="dir" property="clean-dir-build-exists"/>
-		<delete dir="${dir.build}" if:true="${clean-dir-build-exists}"/>
+		<clean-build />
+		<clean-src />
 	</target>
 	<macrodef name="init-create-directories">
 		<sequential>
@@ -71,10 +79,22 @@
 			<mkdir dir="${dir.retrieve.metadata}" />
 		</sequential>
 	</macrodef>
+	<macrodef name="clean-build">
+		<sequential>
+			<available file="${dir.build}" type="dir" property="clean-dir-build-exists"/>
+			<delete dir="${dir.build}" if:true="${clean-dir-build-exists}"/>
+		</sequential>
+	</macrodef>
+	<macrodef name="clean-src">
+		<sequential>
+			<available file="${dir.build}" type="dir" property="clean-dir-build-exists"/>
+			<delete dir="${dir.build}" if:true="${clean-dir-build-exists}"/>
+		</sequential>
+	</macrodef>	
 	
-	<!-- ******************************************* -->
+	<!-- =================================== -->
 	<!-- BUILD project manifest -->
-	<!-- ******************************************* -->
+	<!-- =================================== -->
 	
 	<target name="build-manifest"
 			description="Builds Salesforce project manifest (package.xml) based on the listed metadata types">
@@ -171,7 +191,7 @@
 			<copy tofile="tempFile" file="${dir.retrieve.metadata}/@{metadataType}.log" failonerror="false" overwrite="true">
 				<filterchain>
 					<filterreader classname="org.apache.tools.ant.filters.LineContainsRegExp">
-					  <param type="regexp" value="FullName/Id:*"/>
+						<param type="regexp" value="FullName/Id:*"/>
 					</filterreader>
 					<tokenfilter>
 					    <replacestring from="FullName/Id: " to="&#9;&#9;&lt;members&gt;"/>
@@ -188,7 +208,7 @@
 		</sequential>
 	</macrodef>
 	
-	<macrodef name="metadata-parse-unmanaged"
+	<macrodef name="metadata-parse-related-to-installed"
 			description="Given the list of components, extracts unmanaged component names and stores to its specific xml file">
 		<attribute name="metadataType"/>
 		<sequential>			
@@ -213,6 +233,45 @@
 			</concat>
 		</sequential>
 	</macrodef>
+	
+	<macrodef name="metadata-parse-unmanaged"
+				description="Given the list of components, extracts unmanaged component names and stores to its specific xml file">
+			<attribute name="metadataType"/>
+			<sequential>			
+				<echo message="    Parsing list..."/>
+				<tempfile property="tempFile" suffix=".xml"/>
+				
+				<replaceregexp file="${dir.retrieve.metadata}/@{metadataType}.log"
+					match="^FullName/Id:.*$\n?\r?\n?^Manageable State: (installed|null)$" 
+					replace="" flags="gim"/>
+					
+				<copy tofile="tempFile" file="${dir.retrieve.metadata}/@{metadataType}.log" failonerror="false" overwrite="true">
+					<filterchain>
+						<filterreader classname="org.apache.tools.ant.filters.LineContainsRegExp">
+							<param type="regexp" value="FullName/Id:*"/>
+						</filterreader>
+						<tokenfilter>
+						    <replacestring from="FullName/Id: " to="&#9;&#9;&lt;members&gt;"/>
+							<replaceregex pattern="[/\\].{0,18}$" replace="&lt;/members&gt;" flags="gi"/>
+						</tokenfilter>
+					</filterchain>
+				</copy>
+				<concat destfile="${dir.retrieve.metadata}/@{metadataType}.xml" append="false">
+					<string><![CDATA[	<types>]]>${line.separator}</string>
+					<string><![CDATA[		<name>]]>@{metadataType}<![CDATA[</name>]]>${line.separator}</string>
+					<fileset file="tempFile" />
+					<string><![CDATA[	</types>]]>${line.separator}</string>
+				</concat>
+			</sequential>
+		</macrodef>
+	
+	
+	
+	
+	
+	
+	
+	
 	
 	<macrodef name="metadata-append-to-manifest">
 		<attribute name="metadataType"/>
@@ -252,9 +311,9 @@
 		</sequential>
 	</macrodef>
 	
-	<!-- ******************************************* -->
+	<!-- =================================== -->
 	<!-- RETRIEVE by project manifest -->
-	<!-- ******************************************* -->
+	<!-- =================================== -->
 	
 	<target name="retrieve-by-manifest">
 		<retrieve-by-manifest
@@ -281,9 +340,9 @@
 		</sequential>
 	</macrodef>
 	
-	<!-- ******************************************* -->
+	<!-- =================================== -->
 	<!-- DEPLOY by project manifest -->
-	<!-- ******************************************* -->
+	<!-- =================================== -->
 	
 	<target name="validate" description="Validate deployment">
 		<deploy check-only="true" test-level="RunLocalTests"/>	
