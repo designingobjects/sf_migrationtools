@@ -324,7 +324,7 @@
 		 	Regex to define which portion of the line, the parser will replace
 		 @parser.line.suffix.replace.to.str
 		 	Replace string
-		 
+		
 	-->
 	<!-- ================================================================== -->
 	<macrodef name="metadata-parse"
