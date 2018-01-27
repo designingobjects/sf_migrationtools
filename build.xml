@@ -292,6 +292,7 @@
 					<var name="tempFile.folder" unset="true" />
 
 					<concat destfile="${dir.retrieve.metadata}/@{metadataType}.log" append="false">
+						<fileset dir="${dir.retrieve.metadata}" includes="@{metadataFolder}.log" />
 						<fileset dir="${dir.retrieve.metadata}" includes="@{metadataType}*.log" excludes="@{metadataType}.log" />
 					</concat>
 
