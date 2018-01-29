@@ -1,0 +1,937 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="./ant2html.xsl"?>
+
+<project name="Sample usage of Salesforce Ant tasks"
+         default="usage"
+         basedir="."
+         xmlns:sf="antlib:com.salesforce"
+         xmlns:if="ant:if"
+         xmlns:unless="ant:unless">
+
+	<property file="build.properties" />
+	<property name="temp.manifest.filename" value="package-temp.xml" />
+	<property name="temp.manifest.fullpath" value="${dir.package}/${temp.manifest.filename}" />
+	<property name="manifest.path" value="${dir.src}" />
+
+	<property name="scope.all" value="all" />
+	<property name="scope.unmanaged" value="unmanaged" />
+
+	<!-- Build manifest static XML tags -->
+	<property name="tab" value="&#x0009;" />
+	<property name="newline" value="${line.separator}" />
+	<property name="manifest.tag.xml" value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot; standalone=&quot;yes&quot;?&gt;" />
+	<property name="manifest.tag.package.start" value="&lt;Package xmlns=&quot;http://soap.sforce.com/2006/04/metadata&quot;&gt;" />
+	<property name="manifest.tag.package.end" value="&lt;/Package&gt;" />
+	<property name="manifest.tag.type.start" value="&lt;types&gt;" />
+	<property name="manifest.tag.type.end" value="&lt;/types&gt;" />
+	<property name="manifest.tag.name.start" value="&lt;name&gt;" />
+	<property name="manifest.tag.name.end" value="&lt;/name&gt;" />
+	<property name="manifest.tag.version.start" value="&lt;version&gt;" />
+	<property name="manifest.tag.version.end" value="&lt;/version&gt;" />
+
+	<condition property="sf.src.username" value="">
+		<not>
+			<isset property="sf.src.username" />
+		</not>
+	</condition>
+	<condition property="sf.src.password" value="">
+		<not>
+			<isset property="sf.src.password" />
+		</not>
+	</condition>
+	<condition property="sf.dest.username" value="">
+		<not>
+			<isset property="sf.dest.username" />
+		</not>
+	</condition>
+	<condition property="sf.dest.password" value="">
+		<not>
+			<isset property="sf.dest.password" />
+		</not>
+	</condition>
+	<condition property="sf.sessionId" value="">
+		<not>
+			<isset property="sf.sessionId" />
+		</not>
+	</condition>
+	<condition property="sf.metadataTypes.all" value="">
+		<not>
+			<isset property="sf.metadataTypes.all" />
+		</not>
+	</condition>
+	<condition property="sf.metadataTypes.unmanaged" value="">
+		<not>
+			<isset property="sf.metadataTypes.unmanaged" />
+		</not>
+	</condition>
+	<condition property="sf.metadataTypes.infolder.all" value="">
+		<not>
+			<isset property="sf.metadataTypes.infolder.all" />
+		</not>
+	</condition>
+
+
+
+	<taskdef resource="com/salesforce/antlib.xml" uri="antlib:com.salesforce">
+		<classpath>
+			<pathelement location="${dir.lib}/ant-salesforce.jar" />
+		</classpath>
+	</taskdef>
+
+	<taskdef resource="net/sf/antcontrib/antlib.xml">
+		<classpath>
+			<pathelement location="${dir.lib}/ant-contrib-1.0b3.jar" />
+		</classpath>
+	</taskdef>
+
+	<!-- ================================================================== -->
+	<!-- USAGE -->
+	<!-- ================================================================== -->
+
+	<target name="usage">
+		<echo message="  Execute 'ant all' to build your local project." />
+		<echo message="  Execute 'ant build-manifest' to build your project manifest in the /src directory." />
+		<echo message="  Execute 'ant deploy' to deploy your local project to salesforce." />
+	</target>
+
+	<!-- ================================================================== -->
+	<!-- DOES EVERYTHING -->
+	<!-- ================================================================== -->
+
+	<target name="all" description="The one you call">
+		<clean-src />
+		<antcall target="clean-init" />
+		<antcall target="build-manifest" />
+		<antcall target="retrieve-by-manifest" />
+		<clean-build />
+	</target>
+
+	<!-- ================================================================== -->
+	<!-- INIT and CLEAN -->
+	<!-- ================================================================== -->
+
+	<target name="clean-init" description="Calls clean then init targets">
+		<antcall target="clean" />
+		<antcall target="init" />
+	</target>
+	<target name="init" description="Does all initiailization needed prior to build">
+		<init-create-directories />
+	</target>
+	<target name="clean" description="Removes all artifacts that the build might have created">
+		<clean-build />
+	</target>
+
+	<macrodef name="init-create-directories">
+		<sequential>
+			<mkdir dir="${dir.src}" />
+			<mkdir dir="${dir.build}" />
+			<mkdir dir="${dir.package}" />
+			<mkdir dir="${dir.retrieve}" />
+			<mkdir dir="${dir.retrieve.metadata}" />
+		</sequential>
+	</macrodef>
+	<macrodef name="clean-build">
+		<sequential>
+			<available file="${dir.build}" type="dir" property="dir.build.exists" />
+			<delete dir="${dir.build}" if:true="${dir.build.exists}" />
+		</sequential>
+	</macrodef>
+	<macrodef name="clean-src">
+		<sequential>
+			<delete includeemptydirs="true">
+				<fileset dir="${dir.src}" includes="**/*" excludes="${sf.packagexml.name}" />
+			</delete>
+		</sequential>
+	</macrodef>
+
+	<!-- ================================================================== -->
+	<!-- BUILD project manifest -->
+	<!-- ================================================================== -->
+
+	<target name="build-manifest" description="Builds Salesforce project manifest (package.xml) based on the listed metadata types">
+
+		<!-- Check if build directory exists -->
+		<available file="${dir.build}" type="dir" property="build.manifest.dir.build.exists" />
+		<antcall target="init" unless:true="${build.manifest.dir.build.exists}" />
+		<antcall target="clean-init" if:true="${build.manifest.dir.build.exists}" />
+
+		<!-- Retrieving all (managed and unmanaged) components of given metadata types and adding each component to temp.manifest -->
+		<for list="${sf.metadataTypes.all}" param="metadataType">
+			<sequential>
+				<metadata-add-to-manifest metadataType="@{metadataType}" scope="${scope.all}" />
+			</sequential>
+		</for>
+
+		<!-- Retrieving unmanaged components of given metadata types and adding each component to temp.manifest -->
+		<for list="${sf.metadataTypes.unmanaged}" param="metadataType">
+			<sequential>
+				<metadata-add-to-manifest metadataType="@{metadataType}" scope="${scope.unmanaged}" />
+			</sequential>
+		</for>
+
+		<!-- Retrieving all (managed and unmanaged) components of given metadata types and adding each component to temp.manifest -->
+		<for list="${sf.metadataTypes.infolder.all}" param="metadataType">
+			<sequential>
+				<propertyregex property="metadataType.type" input="@{metadataType}" regexp="([\w]+)(:?)([\w]*)" select="\1" />
+				<propertyregex property="metadataType.folder" input="@{metadataType}" regexp="([\w]+)(:?)([\w]*)" select="\3" />
+				<metadata-add-to-manifest metadataType="${metadataType.type}"
+				                          metadataFolder="${metadataType.folder}"
+				                          scope="${scope.all}"
+				                          inFolder="true" />
+			</sequential>
+		</for>
+
+		<!-- Based on the retrieved components, builds the actual manifest file -->
+		<build-manifest fullpath="${manifest.path}/${sf.packagexml.name}"
+		                temp.manifest="${temp.manifest.fullpath}"
+		                version="${sf.packagexml.version}" />
+
+		<!-- Check if build directory exists -->
+		<available file="${manifest.path}/${sf.packagexml.name}" property="build.manifest.exists" />
+		<fail unless="${build.manifest.exists}" message="Failed to buidld project manifest." />
+		<echo if:true="${build.manifest.exists}" message="Successfully built project manifest: ${manifest.path}/${sf.packagexml.name}" />
+	</target>
+
+	<macrodef name="metadata-add-to-manifest"
+	          description="Gets a list of all components given the specific metadata type and store to its specific log file">
+		<attribute name="metadataType" />
+		<attribute name="metadataFolder" default="" />
+		<attribute name="scope" />
+		<attribute name="inFolder" default="false" />
+		<sequential>
+			<echo message="*********" />
+			<echo message="@{metadataType} (@{scope}):" />
+
+			<!-- Get component list -->
+			<metadata-list metadataType="@{metadataType}" metadataFolder="@{metadataFolder}" inFolder="@{inFolder}" />
+
+			<!-- Parsing component list -->
+			<available file="${dir.retrieve.metadata}/@{metadataType}.log" property="is@{metadataType}Present" />
+			<echo message="    Type has no components." unless:true="${is@{metadataType}Present}" />
+
+			<if>
+				<equals arg1="@{scope}" arg2="${scope.all}" />
+				<then>
+					<metadata-parse dir="${dir.retrieve.metadata}" metadataType="@{metadataType}" if:true="${is@{metadataType}Present}" />
+				</then>
+
+				<elseif>
+					<equals arg1="@{scope}" arg2="${scope.unmanaged}" />
+					<then>
+						<metadata-parse dir="${dir.retrieve.metadata}"
+						                metadataType="@{metadataType}"
+						                isUnmanaged="true"
+						                if:true="${is@{metadataType}Present}" />
+					</then>
+				</elseif>
+
+				<else>
+					<fail message="Parsing @{metadataType} components failed. Undefined scope: @{scope}." />
+				</else>
+			</if>
+
+			<!-- Appending component list to temp manifest -->
+			<metadata-append-to-manifest metadataType="@{metadataType}" if:true="${is@{metadataType}Present}" />
+
+		</sequential>
+	</macrodef>
+
+	<macrodef name="metadata-list"
+	          description="Gets a list of all components given the specific metadata type and store to its specific log file">
+		<attribute name="metadataType" />
+		<attribute name="metadataFolder" default="" />
+		<attribute name="inFolder" default="false" />
+		<sequential>
+			<if>
+				<equals arg1="@{inFolder}" arg2="false" />
+				<then>
+					<echo message="    Retrieving list..." />
+					<sf:listMetadata username="${sf.src.username}"
+					                 password="${sf.src.password}"
+					                 sessionId="${sf.sessionId}"
+					                 serverurl="${sf.server.url}"
+					                 metadataType="@{metadataType}"
+					                 resultFilePath="${dir.retrieve.metadata}/@{metadataType}.log" />
+				</then>
+				<else>
+					<echo message="    Retrieving folders..." />
+					<sf:listMetadata username="${sf.src.username}"
+					                 password="${sf.src.password}"
+					                 sessionId="${sf.sessionId}"
+					                 serverurl="${sf.server.url}"
+					                 metadataType="@{metadataFolder}"
+					                 resultFilePath="${dir.retrieve.metadata}/@{metadataFolder}.log" />
+
+					<tempfile property="tempFile" suffix=".xml" />
+					<copy tofile="tempFile" file="${dir.retrieve.metadata}/@{metadataFolder}.log" failonerror="false" overwrite="true">
+						<filterchain>
+							<filterreader classname="org.apache.tools.ant.filters.LineContainsRegExp">
+								<param type="regexp" value="FullName/Id:*" />
+							</filterreader>
+							<tokenfilter>
+								<replacestring from="FullName/Id: " to="" />
+								<replaceregex pattern="[/\\].{0,18}$" replace="" flags="gi" />
+							</tokenfilter>
+						</filterchain>
+					</copy>
+
+					<loadfile property="tempFile.folder" srcfile="tempFile" />
+					<for param="folder" list="${tempFile.folder}" delimiter="${line.separator}">
+						<sequential>
+							<echo message="        folder @{folder}" />
+							<sf:listMetadata username="${sf.src.username}"
+							                 password="${sf.src.password}"
+							                 sessionId="${sf.sessionId}"
+							                 serverurl="${sf.server.url}"
+							                 metadataType="@{metadataType}"
+							                 folder="@{folder}"
+							                 resultFilePath="${dir.retrieve.metadata}/@{metadataType}-@{folder}.log" />
+						</sequential>
+					</for>
+					<var name="tempFile.folder" unset="true" />
+
+					<concat destfile="${dir.retrieve.metadata}/@{metadataType}.log" append="false">
+						<fileset dir="${dir.retrieve.metadata}" includes="@{metadataFolder}.log" />
+						<fileset dir="${dir.retrieve.metadata}" includes="@{metadataType}*.log" excludes="@{metadataType}.log" />
+					</concat>
+
+				</else>
+			</if>
+
+		</sequential>
+	</macrodef>
+
+	<!-- ================================================================== -->
+	<!-- @Description
+		 Given the metadata component list, wraps each component in a 
+		 <members/> tag, adds the <name/> tag to define the metadata type and
+		 wraps everything in a <type/> tag.
+		 
+		 @dir	
+		 	The directory where the raw metadata component list file is located.
+		 @isUnmanaged
+		 	If true, removes components that are from installed packages
+		 @metadataType
+		 	The metadata type
+		 @parser.line.filter.regex
+		 	Regex to define which line of the metadata file the parser will
+		 	process
+		 @parser.line.prefix.replace.from.regex
+		 	Regex to define which portion of the line, the parser will replace
+		 @parser.line.prefix.replace.to.str
+		 	Replace string
+		 @parser.line.suffix.replace.from.regex
+		 	Regex to define which portion of the line, the parser will replace
+		 @parser.line.suffix.replace.to.str
+		 	Replace string
+	-->
+	<!-- ================================================================== -->
+
+	<macrodef name="metadata-parse"
+	          description="Given the list of components, extracts all component names and stores to its specific xml file">
+		<attribute name="dir" />
+		<attribute name="metadataType" />
+		<attribute name="isUnmanaged" default="false" />
+		<attribute name="parser.line.filter.regex" default="FullName/Id:*" />
+		<attribute name="parser.line.prefix.replace.from.regex" default="FullName/Id: " />
+		<attribute name="parser.line.prefix.replace.to.str" default="&#9;&#9;&lt;members&gt;" />
+		<attribute name="parser.line.suffix.replace.from.regex" default="[/\\].{0,18}$" />
+		<attribute name="parser.line.suffix.replace.to.str" default="&lt;/members&gt;" />
+
+		<sequential>
+			<echo message="    Parsing list..." />
+			<tempfile property="@{dir}/tempFile" suffix=".xml" />
+
+			<replaceregexp file="@{dir}/@{metadataType}.log"
+			               match="^FullName/Id:.*$\n?\r?\n?^Manageable State: (installed)$\n?\r?\n?"
+			               replace=""
+			               flags="gim"
+			               if:true="@{isUnmanaged}" />
+
+			<copy tofile="@{dir}/tempFile" file="@{dir}/@{metadataType}.log" failonerror="false" overwrite="true">
+				<filterchain>
+					<filterreader classname="org.apache.tools.ant.filters.LineContainsRegExp">
+						<param type="regexp" value="@{parser.line.filter.regex}" />
+					</filterreader>
+					<tokenfilter>
+						<replaceregex pattern="@{parser.line.prefix.replace.from.regex}"
+						              replace="@{parser.line.prefix.replace.to.str}"
+						              flags="gi" />
+						<replaceregex pattern="@{parser.line.suffix.replace.from.regex}"
+						              replace="@{parser.line.suffix.replace.to.str}"
+						              flags="gi" />
+					</tokenfilter>
+				</filterchain>
+			</copy>
+
+			<concat destfile="@{dir}/@{metadataType}.xml" append="false">
+				<propertyresource name="tab" />
+				<propertyresource name="manifest.tag.type.start" />
+				<propertyresource name="newline" />
+				<propertyresource name="tab" />
+				<propertyresource name="tab" />
+				<propertyresource name="manifest.tag.name.start" />
+				<string>@{metadataType}</string>
+				<propertyresource name="manifest.tag.name.end" />
+				<propertyresource name="newline" />
+				<fileset file="@{dir}/tempFile" />
+				<propertyresource name="tab" />
+				<propertyresource name="manifest.tag.type.end" />
+				<propertyresource name="newline" />
+			</concat>
+		</sequential>
+	</macrodef>
+
+	<macrodef name="metadata-append-to-manifest">
+		<attribute name="metadataType" />
+		<sequential>
+			<echo message="    Adding list..." />
+			<concat destfile="${temp.manifest.fullpath}" append="true">
+				<fileset dir="${dir.retrieve.metadata}" includes="@{metadataType}.xml" excludes="${temp.manifest.filename}" />
+			</concat>
+		</sequential>
+	</macrodef>
+
+	<macrodef name="build-manifest" description="Creates the project manifest file at @fullpath">
+		<attribute name="fullpath" />
+		<attribute name="temp.manifest" />
+		<attribute name="version" />
+
+		<sequential>
+			<!-- initializing manifest -->
+			<concat destfile="@{fullpath}" append="false">
+				<propertyresource name="manifest.tag.xml" />
+				<propertyresource name="newline" />
+				<propertyresource name="manifest.tag.package.start" />
+				<propertyresource name="newline" />
+			</concat>
+
+			<available file="@{temp.manifest}" property="istempmanifestexists" />
+			<concat destfile="@{fullpath}" append="true" if:true="${istempmanifestexists}">
+				<filelist dir="" files="@{temp.manifest}" />
+			</concat>
+
+			<concat destfile="@{fullpath}" append="true" if:true="${istempmanifestexists}">
+				<propertyresource name="tab" />
+				<propertyresource name="manifest.tag.version.start" />
+				<string>@{version}</string>
+				<propertyresource name="manifest.tag.version.end" />
+				<propertyresource name="newline" />
+				<propertyresource name="manifest.tag.package.end" />
+			</concat>
+		</sequential>
+	</macrodef>
+
+	<!-- ================================================================== -->
+	<!-- RETRIEVE by project manifest -->
+	<!-- ================================================================== -->
+
+	<target name="retrieve-by-manifest">
+		<retrieve-by-manifest manifest-fullpath="${manifest.path}/${sf.packagexml.name}" src-path="${manifest.path}" />
+	</target>
+
+	<target name="refresh">
+		<antcall target="build-manifest" />
+		<antcall target="retrieve-by-manifest" />
+		<clean-build />
+	</target>
+
+	<!-- ================================================================== -->
+	<!-- @Description
+			 Retrieves components specified in project manfiest and stores as
+			 zip. Sleeps for a few seconds and upzips to retrieve target
+			 directory.
+			 
+			 The reason why it is retrieve as zip and then upzips is due to 
+			 large zip files. Salesforce's retrieve, by default gets
+			 components as zip, then if attribute "unzip" is true, will 
+			 upzip the file. However for large zips, there needs to be a
+			 delay for the zip file to be copied from temporary directory to
+			 the target directory.			  
+	-->
+	<!-- ================================================================== -->
+	<macrodef name="retrieve-by-manifest" description="Retrieves, from SFDC, all components specified in the manifest">
+		<attribute name="manifest-fullpath" />
+		<attribute name="src-path" />
+		<sequential>
+			<echo message="Retrieving components specified in @{manifest-fullpath} to @{src-path}." />
+			<!-- Retrieving as zip -->
+			<sf:retrieve username="${sf.src.username}"
+			             password="${sf.src.password}"
+			             sessionId="${sf.sessionId}"
+			             serverurl="${sf.server.url}"
+			             maxPoll="${sf.maxPoll}"
+			             retrieveTarget="@{src-path}"
+			             unpackaged="@{manifest-fullpath}"
+			             singlePackage="true"
+			             trace="${sf.printTrace}"
+			             unzip="false"
+			             apiVersion="${sf.packagexml.version}" />
+
+			<!-- Adding some delay to accommodate large zip files being copied 
+				 from temp directory to retreiveTarget directory. -->
+			<sleep milliseconds="5000" />
+
+			<!-- Unzipping -->
+			<unzip dest="@{src-path}">
+				<fileset dir="@{src-path}">
+					<include name="*.zip" />
+				</fileset>
+			</unzip>
+
+			<!-- Deleting zip file -->
+			<delete failonerror="false">
+				<fileset dir="${manifest.path}" includes="*.zip" />
+			</delete>
+		</sequential>
+	</macrodef>
+
+	<!-- ================================================================== -->
+	<!-- DEPLOY by project manifest -->
+	<!-- ================================================================== -->
+
+	<target name="validate" description="Validate deployment">
+		<deploy check-only="true" test-level="RunLocalTests" />
+	</target>
+
+	<target name="deploy" description="Deploy to sandbox using default parameters">
+		<deploy />
+	</target>
+
+	<target name="deploy-run-local-tests" description="Deploy to sandbox running all local tests">
+		<deploy test-level="RunLocalTests" />
+	</target>
+
+	<macrodef name="deploy" description="General purpose deploy macro">
+		<attribute name="deploy-root" default="${dir.src}" />
+		<attribute name="test-level" default="NoTestRun" />
+		<attribute name="rollback-on-error" default="true" />
+		<attribute name="allow-missing-files" default="true" />
+		<attribute name="auto-update-package" default="true" />
+		<attribute name="check-only" default="false" />
+		<sequential>
+			<sf:deploy username="${sf.dest.username}"
+			           password="${sf.dest.password}"
+			           sessionId="${sf.sessionId}"
+			           serverurl="${sf.server.url}"
+			           maxPoll="${sf.maxPoll}"
+			           deployRoot="@{deploy-root}"
+			           testLevel="@{test-level}"
+			           rollbackOnError="@{rollback-on-error}"
+			           checkOnly="@{check-only}"
+			           allowMissingFiles="@{allow-missing-files}"
+			           autoUpdatePackage="@{auto-update-package}" />
+		</sequential>
+	</macrodef>
+
+	<!-- ================================================================== -->
+	<!-- UNSORTED crap below -->
+	<!-- ================================================================== -->
+
+	<target name="listMetadata">
+		<echo message="Retrieving list of metadata type: ${metadataType}" />
+		<sf:listMetadata username="${sf.username}"
+		                 password="${sf.password}"
+		                 sessionId="${sf.sessionId}"
+		                 serverurl="${sf.serverurl}"
+		                 metadataType="${metadataType}"
+		                 resultFilePath="${dir.retrieve.metadata}/${metadataType}.log" />
+	</target>
+
+	<target name="checkMetadataList">
+		<available file="${dir.retrieve.metadata}/${metadataType}.log" property="is.${metadataType}.present" />
+	</target>
+
+	<target name="parseMetadataList" depends="checkMetadataList" if="is.${metadataType}.present">
+		<echo message="Parsing list of metadata type: ${metadataType}" />
+		<loadfile property="metadatalistlogfile" srcFile="${dir.retrieve.metadata}/${metadataType}.log">
+			<filterchain>
+				<filterreader classname="org.apache.tools.ant.filters.LineContainsRegExp">
+					<param type="regexp" value="FullName/Id:*" />
+				</filterreader>
+				<tokenfilter>
+					<replacestring from="FullName/Id: " to="&#9;&#9;&lt;members&gt;" />
+					<replaceregex pattern="[/\\].{0,18}$" replace="&lt;/members&gt;" flags="gi" />
+				</tokenfilter>
+			</filterchain>
+		</loadfile>
+		<echo message="${metadatalistlogfile}" file="${dir.retrieve.metadata}/${metadataType}-temp.xml" />
+		<concat destfile="${dir.retrieve.metadata}/${metadataType}.xml" append="false">
+			<propertyresource name="newline" />
+			<propertyresource name="manifest.tag.type.end" />
+			<propertyresource name="newline" />
+			<propertyresource name="manifest.tag.type.end" />
+
+			<string>
+				<![CDATA[	<types>]]>${line.separator}</string>
+			<string>
+				<![CDATA[		<name>]]>${metadataType}<![CDATA[</name>]]>${line.separator}</string>
+			<fileset file="${dir.retrieve.metadata}/${metadataType}-temp.xml" />
+			<string>
+				<![CDATA[	</types>]]>${line.separator}</string>
+		</concat>
+		<delete file="${dir.retrieve.metadata}/${metadataType}-temp.xml" />
+	</target>
+
+	<target name="concatMetadataList" depends="checkMetadataList" if="is.${metadataType}.present">
+		<echo message="Appending list of metadata type: ${metadataType}" />
+		<concat destfile="${dir.retrieve.metadata}/Package.xml" append="false">
+			<fileset dir="${dir.retrieve.metadata}" includes="*.xml" excludes="Package.xml" />
+		</concat>
+	</target>
+
+	<target name="buildPackageXml">
+		<mkdir dir="${dir.src}" />
+		<antcall target="initPackageXML" />
+
+		<concat destfile="${dir.src}/package.xml" append="true">
+			<fileset file="${dir.retrieve.metadata}/Package.xml" />
+		</concat>
+
+		<antcall target="completePackageXML" />
+
+	</target>
+
+	<target name="initPackageXML">
+		<mkdir dir="${dir.src}" />
+		<concat destfile="${dir.src}/package.xml" append="false">
+			<string>
+				<![CDATA[<?xml version="1.0" encoding="UTF-8" standalone="yes"?>]]></string>
+			<string>${line.separator}</string>
+			<string>
+				<![CDATA[<Package xmlns="http://soap.sforce.com/2006/04/metadata">]]></string>
+			<string>${line.separator}</string>
+		</concat>
+	</target>
+
+	<target name="completePackageXML">
+		<mkdir dir="${dir.src}" />
+		<concat destfile="${dir.src}/package.xml" append="true">
+			<string>
+				<![CDATA[<version>]]>${sf.packageXmlVersion}<![CDATA[</version>]]></string>
+			<string>${line.separator}</string>
+			<string>
+				<![CDATA[</Package>]]></string>
+		</concat>
+	</target>
+
+	<target name="retrievePackage">
+		<sf:retrieve username="${sf.username}"
+		             password="${sf.password}"
+		             sessionId="${sf.sessionId}"
+		             serverurl="${sf.serverurl}"
+		             maxPoll="${sf.maxPoll}"
+		             retrieveTarget="${dir.src}"
+		             unpackaged="${sf.packagePath}"
+		             singlePackage="true" />
+	</target>
+
+	<!-- Retrieve BY COMPONENT -->
+
+	<target name="setupProject">
+		<antcall target="initPackageXML" />
+		<antcall target="setupPackageXML" />
+		<antcall target="completePackageXML" />
+		<antcall target="setupSRC" />
+	</target>
+
+
+
+
+
+	<target name="setupPackageXML">
+
+		<mkdir dir="${dir.retrieve}" />
+
+		<for list="${sf.metadataTypes}" param="metadataType">
+			<sequential>
+
+				<!-- create the component folder -->
+				<mkdir dir="${dir.retrieve.components}" />
+
+				<!-- retrieving all components of a metadata type -->
+				<antcall target="bulkRetrieveMetadataType">
+					<param name="metadataType" value="@{metadataType}" />
+				</antcall>
+
+				<!-- appending the package.xml to parent package.xml -->
+				<antcall target="appendMetadataTypeManifest" />
+
+				<!-- delete the component folder -->
+				<delete dir="${dir.retrieve.components}" />
+			</sequential>
+		</for>
+
+		<delete dir="${dir.retrieve}" />
+	</target>
+
+	<target name="bulkRetrieveMetadataType">
+		<sf:bulkRetrieve username="${sf.username}"
+		                 password="${sf.password}"
+		                 sessionId="${sf.sessionId}"
+		                 serverurl="${sf.serverurl}"
+		                 maxPoll="${sf.maxPoll}"
+		                 metadataType="${metadataType}"
+		                 batchSize="${bulk.batchsize}"
+		                 retrieveTarget="${dir.retrieve.components}" />
+	</target>
+
+	<target name="appendMetadataTypeManifest">
+		<loadfile property="encoded-file" srcFile="${dir.retrieve.components}/package.xml" encoding="ISO-8859-1">
+			<filterchain>
+				<filterreader classname="org.apache.tools.ant.filters.HeadFilter">
+					<param name="lines" value="-1" />
+					<param name="skip" value="2" />
+				</filterreader>
+				<filterreader classname="org.apache.tools.ant.filters.TailFilter">
+					<param name="lines" value="-1" />
+					<param name="skip" value="2" />
+				</filterreader>
+			</filterchain>
+		</loadfile>
+		<echo message="${encoded-file}" file="${dir.retrieve.components}/package.xml" />
+
+		<concat destfile="${dir.src}/package.xml" append="true">
+			<fileset file="${dir.retrieve.components}/package.xml" />
+		</concat>
+	</target>
+
+	<target name="setupSRC">
+		<sf:retrieve username="${sf.username}"
+		             password="${sf.password}"
+		             sessionId="${sf.sessionId}"
+		             serverurl="${sf.serverurl}"
+		             maxPoll="${sf.maxPoll}"
+		             retrieveTarget="${dir.src}"
+		             unpackaged="${dir.src}/package.xml"
+		             singlePackage="true" />
+	</target>
+
+	<!-- Retrieve BY PACKAGE -->
+	<target name="retrieveAllComponents">
+
+	</target>
+	<target name="retrieveAll">
+		<sf:retrieve username="${sf.username}"
+		             password="${sf.password}"
+		             sessionId="${sf.sessionId}"
+		             serverurl="${sf.serverurl}"
+		             maxPoll="${sf.maxPoll}"
+		             retrieveTarget="${dir.retrieve}"
+		             unpackaged="${sf.packagePath}"
+		             packageNames="${sf.pkgNames}"
+		             singlePackage="false" />
+	</target>
+
+	<target name="mergeRetrievedPackagesFolders">
+		<mkdir dir="src" />
+		<move todir="src">
+			<fileset dir="retrievedAll/${sf.pkg_Unpackaged}" />
+		</move>
+		<move todir="src">
+			<fileset dir="retrievedAll/${sf.pkg_CKSW_BASE}" />
+		</move>
+		<move todir="src">
+			<fileset dir="retrievedAll/${sf.pkg_CKSW_SRVC}" />
+		</move>
+		<move todir="src">
+			<fileset dir="retrievedAll/${sf.pkg_SDOC}" />
+		</move>
+	</target>
+
+	<!-- Test out deploy and retrieve verbs for package 'mypkg' -->
+	<target name="test">
+		<!-- Upload the contents of the "mypkg" package -->
+		<sf:deploy username="${sf.username}"
+		           password="${sf.password}"
+		           sessionId="${sf.sessionId}"
+		           serverurl="${sf.serverurl}"
+		           maxPoll="${sf.maxPoll}"
+		           deployRoot="mypkg"
+		           rollbackOnError="true" />
+		<mkdir dir="retrieveOutput" />
+		<!-- Retrieve the contents into another directory -->
+		<sf:retrieve username="${sf.username}"
+		             password="${sf.password}"
+		             sessionId="${sf.sessionId}"
+		             serverurl="${sf.serverurl}"
+		             maxPoll="${sf.maxPoll}"
+		             retrieveTarget="retrieveOutput"
+		             packageNames="MyPkg" />
+	</target>
+
+	<!-- Retrieve an unpackaged set of metadata from your org -->
+	<!-- The file unpackaged/package.xml lists what is to be retrieved -->
+	<target name="retrieveUnpackaged">
+		<mkdir dir="retrieveUnpackaged" />
+		<!-- Retrieve the contents into another directory -->
+		<sf:retrieve username="${sf.username}"
+		             password="${sf.password}"
+		             sessionId="${sf.sessionId}"
+		             serverurl="${sf.serverurl}"
+		             maxPoll="${sf.maxPoll}"
+		             retrieveTarget="retrieveUnpackaged"
+		             unpackaged="unpackaged/package.xml" />
+	</target>
+
+	<!-- Retrieve all the items of a particular metadata type -->
+	<target name="bulkRetrieve">
+		<sf:bulkRetrieve username="${sf.username}"
+		                 password="${sf.password}"
+		                 sessionId="${sf.sessionId}"
+		                 serverurl="${sf.serverurl}"
+		                 maxPoll="${sf.maxPoll}"
+		                 metadataType="${sf.metadataType}"
+		                 retrieveTarget="retrieveUnpackaged" />
+	</target>
+
+	<!-- Retrieve metadata for all the packages specified under packageNames -->
+	<target name="retrievePkg">
+		<sf:retrieve username="${sf.username}"
+		             password="${sf.password}"
+		             sessionId="${sf.sessionId}"
+		             serverurl="${sf.serverurl}"
+		             maxPoll="${sf.maxPoll}"
+		             retrieveTarget="retrieveOutput"
+		             packageNames="${sf.pkgName}" />
+	</target>
+
+	<!-- Deploy the unpackaged set of metadata retrieved with retrieveUnpackaged and run tests in this organization's namespace only-->
+	<target name="deployUnpackaged">
+		<sf:deploy username="${sf.username}"
+		           password="${sf.password}"
+		           sessionId="${sf.sessionId}"
+		           serverurl="${sf.serverurl}"
+		           maxPoll="${sf.maxPoll}"
+		           deployRoot="retrieveUnpackaged"
+		           rollbackOnError="true" />
+	</target>
+
+	<!-- Deploy a zip of metadata files to the org -->
+	<target name="deployZip">
+		<sf:deploy username="${sf.username}"
+		           password="${sf.password}"
+		           sessionId="${sf.sessionId}"
+		           serverurl="${sf.serverurl}"
+		           maxPoll="${sf.maxPoll}"
+		           zipFile="${sf.zipFile}"
+		           pollWaitMillis="1000"
+		           rollbackOnError="true" />
+	</target>
+
+	<!-- Shows deploying code & running tests for code in directory -->
+	<target name="deployCode">
+		<!-- Upload the contents of the "codepkg" directory, running the tests for just 1 class -->
+		<sf:deploy username="${sf.username}"
+		           password="${sf.password}"
+		           sessionId="${sf.sessionId}"
+		           serverurl="${sf.serverurl}"
+		           maxPoll="${sf.maxPoll}"
+		           deployRoot="codepkg"
+		           testLevel="RunSpecifiedTests"
+		           rollbackOnError="true">
+			<runTest>SampleDeployClass</runTest>
+		</sf:deploy>
+	</target>
+
+	<!-- Shows deploying code with no TestLevel sepcified -->
+	<target name="deployCodeNoTestLevelSpecified">
+		<sf:deploy username="${sf.username}"
+		           password="${sf.password}"
+		           sessionId="${sf.sessionId}"
+		           serverurl="${sf.serverurl}"
+		           maxPoll="${sf.maxPoll}"
+		           deployRoot="codepkg"
+		           rollbackOnError="true" />
+	</target>
+
+	<!-- Shows deploying code and running tests only within the org namespace -->
+	<target name="deployCodeRunLocalTests">
+		<sf:deploy username="${sf.username}"
+		           password="${sf.password}"
+		           sessionId="${sf.sessionId}"
+		           serverurl="${sf.serverurl}"
+		           maxPoll="${sf.maxPoll}"
+		           deployRoot="codepkg"
+		           rollbackOnError="true"
+		           testlevel="RunLocalTests" />
+	</target>
+
+	<!-- Shows removing code; only succeeds if done after deployCode -->
+	<target name="undeployCode">
+		<sf:deploy username="${sf.username}"
+		           password="${sf.password}"
+		           sessionId="${sf.sessionId}"
+		           serverurl="${sf.serverurl}"
+		           maxPoll="${sf.maxPoll}"
+		           deployRoot="removecodepkg" />
+	</target>
+
+	<!-- Shows retrieving code; only succeeds if done after deployCode -->
+	<target name="retrieveCode">
+		<!-- Retrieve the contents listed in the file codepkg/package.xml into the codepkg directory -->
+		<sf:retrieve username="${sf.username}"
+		             password="${sf.password}"
+		             sessionId="${sf.sessionId}"
+		             serverurl="${sf.serverurl}"
+		             maxPoll="${sf.maxPoll}"
+		             retrieveTarget="codepkg"
+		             unpackaged="codepkg/package.xml" />
+	</target>
+
+	<!-- Shows deploying code, running all tests, and running tests (1 of which fails), and logging. -->
+	<target name="deployCodeFailingTest">
+		<!-- Upload the contents of the "codepkg" package, running all tests -->
+		<sf:deploy username="${sf.username}"
+		           password="${sf.password}"
+		           sessionId="${sf.sessionId}"
+		           serverurl="${sf.serverurl}"
+		           maxPoll="${sf.maxPoll}"
+		           deployRoot="codepkg"
+		           testLevel="RunAllTestsInOrg"
+		           rollbackOnError="true"
+		           logType="Debugonly" />
+	</target>
+
+	<!-- Shows check only; never actually saves to the server -->
+	<target name="deployCodeCheckOnly">
+		<sf:deploy username="${sf.username}"
+		           password="${sf.password}"
+		           sessionId="${sf.sessionId}"
+		           serverurl="${sf.serverurl}"
+		           maxPoll="${sf.maxPoll}"
+		           deployRoot="codepkg"
+		           checkOnly="true" />
+	</target>
+
+	<!-- Shows quick deployment of recent validation. Set the property sf.recentValidationId to your recent check only deployment Id -->
+	<target name="quickDeploy">
+		<sf:deployRecentValidation username="${sf.username}"
+		                           password="${sf.password}"
+		                           sessionId="${sf.sessionId}"
+		                           serverurl="${sf.serverurl}"
+		                           maxPoll="${sf.maxPoll}"
+		                           recentValidationId="${sf.recentValidationId}" />
+	</target>
+
+	<!-- Shows cancel deployment of deploy request either pending or in progress. 
+	 	Set property sf.requestId to Id of pending or in progress deploy request -->
+	<target name="cancelDeploy">
+		<sf:cancelDeploy username="${sf.username}"
+		                 password="${sf.password}"
+		                 serverurl="${sf.serverurl}"
+		                 maxPoll="${sf.maxPoll}"
+		                 requestId="${sf.requestId}" />
+	</target>
+
+	<!-- Retrieve the information on all supported metadata type -->
+	<target name="describeMetadata">
+		<mkdir dir="${dir.retrieve.metadata}" />
+		<sf:describeMetadata username="${sf.username}"
+		                     password="${sf.password}"
+		                     sessionId="${sf.sessionId}"
+		                     serverurl="${sf.serverurl}"
+		                     resultFilePath="${dir.retrieve.metadata}/metadatatypes.xml" />
+	</target>
+
+</project>

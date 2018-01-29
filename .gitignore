@@ -1,0 +1,10 @@
+/src/**
+
+/build/**
+/retrieved/**
+/tempFile
+/Referenced Packages/**
+/.project
+/salesforce.schema
+/com.salesforce.ide.core.prefs
+/.settings/com.salesforce.ide.core.prefs
