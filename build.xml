@@ -9,12 +9,12 @@
          xmlns:unless="ant:unless">
 
 	<property file="build.properties" />
-	<property name="temp-manifest-filename" value="package-temp.xml" />
-	<property name="temp-manifest-fullpath" value="${dir.package}/${temp-manifest-filename}" />
-	<property name="manifest-path" value="${dir.src}" />
+	<property name="temp.manifest.filename" value="package-temp.xml" />
+	<property name="temp.manifest.fullpath" value="${dir.package}/${temp.manifest.filename}" />
+	<property name="manifest.path" value="${dir.src}" />
 
-	<property name="scope-all" value="all" />
-	<property name="scope-unmanaged" value="unmanaged" />
+	<property name="scope.all" value="all" />
+	<property name="scope.unmanaged" value="unmanaged" />
 
 	<!-- Build manifest static XML tags -->
 	<property name="tab" value="&#x0009;" />
@@ -28,7 +28,6 @@
 	<property name="manifest.tag.name.end" value="&lt;/name&gt;" />
 	<property name="manifest.tag.version.start" value="&lt;version&gt;" />
 	<property name="manifest.tag.version.end" value="&lt;/version&gt;" />
-
 
 	<condition property="sf.src.username" value="">
 		<not>
@@ -100,13 +99,10 @@
 	<!-- ================================================================== -->
 
 	<target name="all" description="The one you call">
-		<available file="${dir.src}" type="dir" property="clean-dir-src-exists" />
-		<delete dir="${dir.src}" if:true="${clean-dir-src-exists}" />
-
+		<antcall target="clean-init" />
 		<antcall target="build-manifest" />
-		<clean-build />
-
 		<antcall target="retrieve-by-manifest" />
+		<clean-build />
 	</target>
 
 	<!-- ================================================================== -->
@@ -124,8 +120,10 @@
 		<clean-build />
 		<clean-src />
 	</target>
+	
 	<macrodef name="init-create-directories">
 		<sequential>
+			<mkdir dir="${dir.src}" />
 			<mkdir dir="${dir.build}" />
 			<mkdir dir="${dir.package}" />
 			<mkdir dir="${dir.retrieve}" />
@@ -134,14 +132,14 @@
 	</macrodef>
 	<macrodef name="clean-build">
 		<sequential>
-			<available file="${dir.build}" type="dir" property="clean-dir-build-exists" />
-			<delete dir="${dir.build}" if:true="${clean-dir-build-exists}" />
+			<available file="${dir.build}" type="dir" property="dir.build.exists" />
+			<delete dir="${dir.build}" if:true="${dir.build.exists}" />
 		</sequential>
 	</macrodef>
 	<macrodef name="clean-src">
 		<sequential>
-			<available file="${dir.build}" type="dir" property="clean-dir-build-exists" />
-			<delete dir="${dir.build}" if:true="${clean-dir-build-exists}" />
+			<available file="${dir.build}" type="dir" property="dir.src.exists" />
+			<delete dir="${dir.build}" if:true="${dir.src.exists}" />
 		</sequential>
 	</macrodef>
 
@@ -152,45 +150,45 @@
 	<target name="build-manifest" description="Builds Salesforce project manifest (package.xml) based on the listed metadata types">
 
 		<!-- Check if build directory exists -->
-		<available file="${dir.build}" type="dir" property="build-manifest-dir-build-exists" />
-		<antcall target="init" unless:true="${build-manifest-dir-build-exists}" />
-		<antcall target="clean-init" if:true="${build-manifest-dir-build-exists}" />
+		<available file="${dir.build}" type="dir" property="build.manifest.dir.build.exists" />
+		<antcall target="init" unless:true="${build.manifest.dir.build.exists}" />
+		<antcall target="clean-init" if:true="${build.manifest.dir.build.exists}" />
 
-		<!-- Retrieving all (managed and unmanaged) components of given metadata types and adding each component to temp-manifest -->
+		<!-- Retrieving all (managed and unmanaged) components of given metadata types and adding each component to temp.manifest -->
 		<for list="${sf.metadataTypes.all}" param="metadataType">
 			<sequential>
-				<metadata-add-to-manifest metadataType="@{metadataType}" scope="${scope-all}" />
+				<metadata-add-to-manifest metadataType="@{metadataType}" scope="${scope.all}" />
 			</sequential>
 		</for>
 
-		<!-- Retrieving unmanaged components of given metadata types and adding each component to temp-manifest -->
+		<!-- Retrieving unmanaged components of given metadata types and adding each component to temp.manifest -->
 		<for list="${sf.metadataTypes.unmanaged}" param="metadataType">
 			<sequential>
-				<metadata-add-to-manifest metadataType="@{metadataType}" scope="${scope-unmanaged}" />
+				<metadata-add-to-manifest metadataType="@{metadataType}" scope="${scope.unmanaged}" />
 			</sequential>
 		</for>
 
-		<!-- Retrieving all (managed and unmanaged) components of given metadata types and adding each component to temp-manifest -->
+		<!-- Retrieving all (managed and unmanaged) components of given metadata types and adding each component to temp.manifest -->
 		<for list="${sf.metadataTypes.infolder.all}" param="metadataType">
 			<sequential>
 				<propertyregex property="metadataType.type" input="@{metadataType}" regexp="([\w]+)(:?)([\w]*)" select="\1" />
 				<propertyregex property="metadataType.folder" input="@{metadataType}" regexp="([\w]+)(:?)([\w]*)" select="\3" />
 				<metadata-add-to-manifest metadataType="${metadataType.type}"
 				                          metadataFolder="${metadataType.folder}"
-				                          scope="${scope-all}"
+				                          scope="${scope.all}"
 				                          inFolder="true" />
 			</sequential>
 		</for>
 
 		<!-- Based on the retrieved components, builds the actual manifest file -->
-		<build-manifest fullpath="${manifest-path}/${sf.packagexml.name}"
-		                temp-manifest="${temp-manifest-fullpath}"
+		<build-manifest fullpath="${manifest.path}/${sf.packagexml.name}"
+		                temp.manifest="${temp.manifest.fullpath}"
 		                version="${sf.packagexml.version}" />
 
 		<!-- Check if build directory exists -->
-		<available file="${manifest-path}/${sf.packagexml.name}" property="build-manifest-exists" />
-		<fail unless="${build-manifest-exists}" message="Failed to buidld project manifest." />
-		<echo if:true="${build-manifest-exists}" message="Successfully built project manifest: ${manifest-path}/${sf.packagexml.name}" />
+		<available file="${manifest.path}/${sf.packagexml.name}" property="build.manifest.exists" />
+		<fail unless="${build.manifest.exists}" message="Failed to buidld project manifest." />
+		<echo if:true="${build.manifest.exists}" message="Successfully built project manifest: ${manifest.path}/${sf.packagexml.name}" />
 	</target>
 
 	<macrodef name="metadata-add-to-manifest"
@@ -211,17 +209,17 @@
 			<echo message="    Type has no components." unless:true="${is@{metadataType}Present}" />
 
 			<if>
-				<equals arg1="@{scope}" arg2="${scope-all}" />
+				<equals arg1="@{scope}" arg2="${scope.all}" />
 				<then>
 					<metadata-parse dir="${dir.retrieve.metadata}" metadataType="@{metadataType}" if:true="${is@{metadataType}Present}" />
 				</then>
 
 				<elseif>
-					<equals arg1="@{scope}" arg2="${scope-unmanaged}" />
+					<equals arg1="@{scope}" arg2="${scope.unmanaged}" />
 					<then>
 						<metadata-parse dir="${dir.retrieve.metadata}"
 						                metadataType="@{metadataType}"
-										isUnmanaged="true"
+						                isUnmanaged="true"
 						                if:true="${is@{metadataType}Present}" />
 					</then>
 				</elseif>
@@ -325,9 +323,9 @@
 		 	Regex to define which portion of the line, the parser will replace
 		 @parser.line.suffix.replace.to.str
 		 	Replace string
-		
 	-->
 	<!-- ================================================================== -->
+
 	<macrodef name="metadata-parse"
 	          description="Given the list of components, extracts all component names and stores to its specific xml file">
 		<attribute name="dir" />
@@ -344,10 +342,10 @@
 			<tempfile property="@{dir}/tempFile" suffix=".xml" />
 
 			<replaceregexp file="@{dir}/@{metadataType}.log"
-					               match="^FullName/Id:.*$\n?\r?\n?^Manageable State: (installed)$\n?\r?\n?"
-					               replace=""
-					               flags="gim"
-					               if:true="@{isUnmanaged}" />
+			               match="^FullName/Id:.*$\n?\r?\n?^Manageable State: (installed)$\n?\r?\n?"
+			               replace=""
+			               flags="gim"
+			               if:true="@{isUnmanaged}" />
 
 			<copy tofile="@{dir}/tempFile" file="@{dir}/@{metadataType}.log" failonerror="false" overwrite="true">
 				<filterchain>
@@ -364,7 +362,6 @@
 					</tokenfilter>
 				</filterchain>
 			</copy>
-
 
 			<concat destfile="@{dir}/@{metadataType}.xml" append="false">
 				<propertyresource name="tab" />
@@ -388,15 +385,15 @@
 		<attribute name="metadataType" />
 		<sequential>
 			<echo message="    Adding list..." />
-			<concat destfile="${temp-manifest-fullpath}" append="true">
-				<fileset dir="${dir.retrieve.metadata}" includes="@{metadataType}.xml" excludes="${temp-manifest-filename}" />
+			<concat destfile="${temp.manifest.fullpath}" append="true">
+				<fileset dir="${dir.retrieve.metadata}" includes="@{metadataType}.xml" excludes="${temp.manifest.filename}" />
 			</concat>
 		</sequential>
 	</macrodef>
 
 	<macrodef name="build-manifest" description="Creates the project manifest file at @fullpath">
 		<attribute name="fullpath" />
-		<attribute name="temp-manifest" />
+		<attribute name="temp.manifest" />
 		<attribute name="version" />
 
 		<sequential>
@@ -408,9 +405,9 @@
 				<propertyresource name="newline" />
 			</concat>
 
-			<available file="@{temp-manifest}" property="istempmanifestexists" />
+			<available file="@{temp.manifest}" property="istempmanifestexists" />
 			<concat destfile="@{fullpath}" append="true" if:true="${istempmanifestexists}">
-				<filelist dir="" files="@{temp-manifest}" />
+				<filelist dir="" files="@{temp.manifest}" />
 			</concat>
 
 			<concat destfile="@{fullpath}" append="true" if:true="${istempmanifestexists}">
@@ -429,14 +426,29 @@
 	<!-- ================================================================== -->
 
 	<target name="retrieve-by-manifest">
-		<retrieve-by-manifest manifest-fullpath="${manifest-path}/${sf.packagexml.name}" src-path="${manifest-path}" />
+		<retrieve-by-manifest manifest-fullpath="${manifest.path}/${sf.packagexml.name}" src-path="${manifest.path}" />
 	</target>
 
+	<!-- ================================================================== -->
+	<!-- @Description
+			 Retrieves components specified in project manfiest and stores as
+			 zip. Sleeps for a few seconds and upzips to retrieve target
+			 directory.
+			 
+			 The reason why it is retrieve as zip and then upzips is due to 
+			 large zip files. Salesforce's retrieve, by default gets
+			 components as zip, then if attribute "unzip" is true, will 
+			 upzip the file. However for large zips, there needs to be a
+			 delay for the zip file to be copied from temporary directory to
+			 the target directory.			  
+	-->
+	<!-- ================================================================== -->
 	<macrodef name="retrieve-by-manifest" description="Retrieves, from SFDC, all components specified in the manifest">
 		<attribute name="manifest-fullpath" />
 		<attribute name="src-path" />
 		<sequential>
-			<echo message="Retrieving components specified in @{manifest-fullpath}." />
+			<echo message="Retrieving components specified in @{manifest-fullpath} to @{src-path}." />
+			<!-- Retrieving as zip -->
 			<sf:retrieve username="${sf.src.username}"
 			             password="${sf.src.password}"
 			             sessionId="${sf.sessionId}"
@@ -445,7 +457,25 @@
 			             retrieveTarget="@{src-path}"
 			             unpackaged="@{manifest-fullpath}"
 			             singlePackage="true"
-			             trace="${sf.printTrace}" />
+			             trace="${sf.printTrace}"
+			             unzip="false"
+			             apiVersion="${sf.packagexml.version}" />
+
+			<!-- Adding some delay to accommodate large zip files being copied 
+				 from temp directory to retreiveTarget directory. -->
+			<sleep milliseconds="5000" />
+
+			<!-- Unzipping -->
+			<unzip dest="@{src-path}">
+				<fileset dir="@{src-path}">
+					<include name="*.zip" />
+				</fileset>
+			</unzip>
+
+			<!-- Deleting zip file -->
+			<delete failonerror="false">
+				<fileset dir="${manifest.path}" includes="*.zip" />
+			</delete>
 		</sequential>
 	</macrodef>
 
@@ -487,15 +517,9 @@
 		</sequential>
 	</macrodef>
 
-
-
-
-
-
-
-	<!-- ############################################# -->
-
-
+	<!-- ================================================================== -->
+	<!-- UNSORTED crap below -->
+	<!-- ================================================================== -->
 
 	<target name="listMetadata">
 		<echo message="Retrieving list of metadata type: ${metadataType}" />
@@ -708,11 +732,6 @@
 		</move>
 	</target>
 
-
-
-
-
-
 	<!-- Test out deploy and retrieve verbs for package 'mypkg' -->
 	<target name="test">
 		<!-- Upload the contents of the "mypkg" package -->
@@ -907,15 +926,5 @@
 		                     serverurl="${sf.serverurl}"
 		                     resultFilePath="${dir.retrieve.metadata}/metadatatypes.xml" />
 	</target>
-	<!--
-		<target name="listMetadata">
-			<mkdir dir="${dir.retrieve.metadata}"/>
-			<sf:listMetadata username="${sf.username}" 
-					password="${sf.password}" 
-					sessionId="${sf.sessionId}" 
-					serverurl="${sf.serverurl}" 
-					metadataType="FieldSet"
-					resultFilePath="${dir.retrieve.metadata}/FieldSet"/>
-		</target>-->
 
 </project>
