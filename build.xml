@@ -99,6 +99,7 @@
 	<!-- ================================================================== -->
 
 	<target name="all" description="The one you call">
+		<clean-src />
 		<antcall target="clean-init" />
 		<antcall target="build-manifest" />
 		<antcall target="retrieve-by-manifest" />
@@ -118,9 +119,8 @@
 	</target>
 	<target name="clean" description="Removes all artifacts that the build might have created">
 		<clean-build />
-		<clean-src />
 	</target>
-	
+
 	<macrodef name="init-create-directories">
 		<sequential>
 			<mkdir dir="${dir.src}" />
@@ -138,8 +138,9 @@
 	</macrodef>
 	<macrodef name="clean-src">
 		<sequential>
-			<available file="${dir.build}" type="dir" property="dir.src.exists" />
-			<delete dir="${dir.build}" if:true="${dir.src.exists}" />
+			<delete includeemptydirs="true">
+				<fileset dir="${dir.src}" includes="**/*" excludes="${sf.packagexml.name}" />
+			</delete>
 		</sequential>
 	</macrodef>
 
@@ -427,6 +428,12 @@
 
 	<target name="retrieve-by-manifest">
 		<retrieve-by-manifest manifest-fullpath="${manifest.path}/${sf.packagexml.name}" src-path="${manifest.path}" />
+	</target>
+
+	<target name="refresh">
+		<antcall target="build-manifest" />
+		<antcall target="retrieve-by-manifest" />
+		<clean-build />
 	</target>
 
 	<!-- ================================================================== -->
