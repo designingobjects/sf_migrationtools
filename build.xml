@@ -133,7 +133,9 @@
 	<macrodef name="clean-build">
 		<sequential>
 			<available file="${dir.build}" type="dir" property="dir.build.exists" />
-			<delete dir="${dir.build}" if:true="${dir.build.exists}" />
+			<delete includeemptydirs="true" if:true="${dir.build.exists}">
+				<fileset dir="${dir.build}" includes="**/*" />
+			</delete>
 		</sequential>
 	</macrodef>
 	<macrodef name="clean-src">
