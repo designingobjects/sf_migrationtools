@@ -84,6 +84,8 @@
 		</classpath>
 	</taskdef>
 
+
+
 	<!-- ================================================================== -->
 	<!-- USAGE -->
 	<!-- ================================================================== -->
@@ -187,14 +189,13 @@
 		<build-manifest fullpath="${manifest.path}/${sf.packagexml.name}"
 		                temp.manifest="${temp.manifest.fullpath}"
 		                version="${sf.packagexml.version}" />
-
+		
 		<exclude-components-in-manifest />
 
 		<!-- Check if build directory exists -->
 		<available file="${manifest.path}/${sf.packagexml.name}" property="build.manifest.exists" />
 		<fail unless="${build.manifest.exists}" message="Failed to buidld project manifest." />
 		<echo if:true="${build.manifest.exists}" message="Successfully built project manifest: ${manifest.path}/${sf.packagexml.name}" />
-
 	</target>
 
 	<macrodef name="metadata-add-to-manifest"
@@ -435,18 +436,14 @@
 		<sequential>
 			<for list="${sf.metadataComponents.exclude}" param="componentExclude">
 				<sequential>
-					<replaceregexp file="${sf.packagexml.dir}/${sf.packagexml.name}"
-					               match="&#9;&#9;&lt;members&gt;@{componentExclude}&lt;/members&gt;\n?\r?\n?"
-					               replace=""
-					               flags="gi" />
+					<replace file="${sf.packagexml.dir}/${sf.packagexml.name}"
+					         token="&#9;&#9;&lt;members&gt;@{componentExclude}&lt;/members&gt;\n?\r?\n?"
+					         value="">
+					</replace>
 				</sequential>
 			</for>
 		</sequential>
 	</macrodef>
-
-	<target name="a">
-		<exclude-components-in-manifest />
-	</target>
 
 	<!-- ================================================================== -->
 	<!-- RETRIEVE by project manifest -->
