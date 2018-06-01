@@ -11,15 +11,29 @@ This repository contains a skeleton Salesforce project. The project contains the
 * Ant and ant-contrib
 
 ### Build.Properties
+#### Setup Ant Location
+```
+# Path where Apache ANT is located. Make sure lib/ant-salesforce.jar and lib/ant-contrib-1.0b3.jar exists
+ant.home = /tools/apache-ant-1.10.1
+```
+
 #### Setup Login Credentials
 ```
 sf.server.url = https://test.salesforce.com
 #sf.serverurl = https://login.salesforce.com
 
-sf.src.username = jerome.julba@o2ebrands.com.ttmdev	
-sf.src.password = Revers33
+sf.src.username = 
+sf.src.password = 
 sf.dest.username = 
 sf.dest.password = 
+```
+
+#### Add/Remove Component Types
+```
+sf.metadataTypes.all = ...
+sf.metadataTypes.unmanaged = ...
+sf.metadataTypes.infolder.all = ...
+sf.metadataComponents.exclude = ...
 ```
 
 ### Commands
