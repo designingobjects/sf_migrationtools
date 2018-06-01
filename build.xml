@@ -84,6 +84,8 @@
 		</classpath>
 	</taskdef>
 
+
+
 	<!-- ================================================================== -->
 	<!-- USAGE -->
 	<!-- ================================================================== -->
@@ -187,6 +189,8 @@
 		<build-manifest fullpath="${manifest.path}/${sf.packagexml.name}"
 		                temp.manifest="${temp.manifest.fullpath}"
 		                version="${sf.packagexml.version}" />
+		
+		<exclude-components-in-manifest />
 
 		<!-- Check if build directory exists -->
 		<available file="${manifest.path}/${sf.packagexml.name}" property="build.manifest.exists" />
@@ -421,6 +425,23 @@
 				<propertyresource name="newline" />
 				<propertyresource name="manifest.tag.package.end" />
 			</concat>
+		</sequential>
+	</macrodef>
+
+	<!-- ================================================================== -->
+	<!-- EXCLUDING known compoents that causes deployment issues from manifest -->
+	<!-- ================================================================== -->
+
+	<macrodef name="exclude-components-in-manifest" description="Remove listed components that are known to cause deployment issues">
+		<sequential>
+			<for list="${sf.metadataComponents.exclude}" param="componentExclude">
+				<sequential>
+					<replace file="${sf.packagexml.dir}/${sf.packagexml.name}"
+					         token="&#9;&#9;&lt;members&gt;@{componentExclude}&lt;/members&gt;\n?\r?\n?"
+					         value="">
+					</replace>
+				</sequential>
+			</for>
 		</sequential>
 	</macrodef>
 
